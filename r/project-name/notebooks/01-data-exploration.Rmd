@@ -1,0 +1,292 @@
+---
+title: "Data Exploration"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 6,
+  dpi = 300
+)
+
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(corrplot)
+library(here)
+
+# Source project functions
+source(here("R", "utils.R"))
+source(here("R", "data_processing.R"))
+
+# Load configuration
+config <- load_config()
+setup_logging(config)
+```
+
+## Project Overview
+
+Brief description of the project goals and the dataset being analyzed.
+
+## Data Loading
+
+```{r load-data}
+# Load raw data
+data_path <- here(config$data$raw_path, "dataset.csv")
+raw_data <- load_raw_data(data_path, config)
+
+# Display basic information
+cat("Dataset dimensions:", nrow(raw_data), "rows ×", ncol(raw_data), "columns\n")
+```
+
+## Data Structure
+
+```{r data-structure}
+# Display data structure
+str(raw_data)
+
+# Show first few rows
+DT::datatable(
+  head(raw_data, 100),
+  options = list(scrollX = TRUE, pageLength = 10),
+  caption = "First 100 rows of the dataset"
+)
+```
+
+## Summary Statistics
+
+```{r summary-stats}
+# Numerical summaries
+numerical_cols %
+    summarise_all(~ paste("Unique values:", n_distinct(.))) %>%
+    tidyr::pivot_longer(everything(), names_to = "Variable", values_to = "Info") %>%
+    knitr::kable()
+}
+```
+
+## Missing Data Analysis
+
+```{r missing-data}
+# Calculate missing data percentages
+missing_data %
+  summarise_all(~ sum(is.na(.)) / length(.) * 100) %>%
+  tidyr::pivot_longer(everything(), names_to = "Variable", values_to = "Missing_Percent") %>%
+  arrange(desc(Missing_Percent))
+
+# Visualize missing data
+missing_plot %
+  filter(Missing_Percent > 0) %>%
+  ggplot(aes(x = reorder(Variable, Missing_Percent), y = Missing_Percent)) +
+  geom_col(fill = "steelblue", alpha = 0.7) +
+  coord_flip() +
+  labs(
+    title = "Missing Data by Variable",
+    x = "Variables",
+    y = "Missing Percentage (%)"
+  ) +
+  theme_minimal()
+
+ggplotly(missing_plot)
+
+# Display missing data table
+DT::datatable(
+  missing_data,
+  options = list(pageLength = 15),
+  caption = "Missing data summary"
+) %>%
+  DT::formatRound("Missing_Percent", digits = 2)
+```
+
+## Target Variable Analysis
+
+```{r target-analysis}
+target_col %
+    count(!!sym(target_col)) %>%
+    mutate(percentage = n / sum(n) * 100)
+  
+  print(target_summary)
+  
+  # Visualize target distribution
+  target_plot %
+    ggplot(aes(x = !!sym(target_col))) +
+    geom_bar(fill = "coral", alpha = 0.7) +
+    labs(
+      title = paste("Distribution of", target_col),
+      x = target_col,
+      y = "Count"
+    ) +
+    theme_minimal()
+  
+  ggplotly(target_plot)
+}
+```
+
+## Feature Distributions
+
+```{r feature-distributions}
+# Numerical features
+numerical_features %
+  select_if(is.numeric) %>%
+  names()
+
+if (length(numerical_features) > 0) {
+  # Create distribution plots for numerical features
+  numerical_plots %
+    select(all_of(numerical_features)) %>%
+    tidyr::pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
+    ggplot(aes(x = value)) +
+    geom_histogram(bins = 30, fill = "skyblue", alpha = 0.7) +
+    facet_wrap(~ variable, scales = "free") +
+    labs(title = "Distribution of Numerical Features") +
+    theme_minimal()
+  
+  print(numerical_plots)
+}
+
+# Categorical features
+categorical_features %
+  select_if(function(x) is.character(x) || is.factor(x)) %>%
+  names()
+
+if (length(categorical_features) > 0) {
+  # Show top categories for each categorical feature
+  for (cat_var in categorical_features[1:min(6, length(categorical_features))]) {
+    cat_plot %
+      count(!!sym(cat_var)) %>%
+      top_n(10, n) %>%
+      ggplot(aes(x = reorder(!!sym(cat_var), n), y = n)) +
+      geom_col(fill = "lightgreen", alpha = 0.7) +
+      coord_flip() +
+      labs(
+        title = paste("Top categories for", cat_var),
+        x = cat_var,
+        y = "Count"
+      ) +
+      theme_minimal()
+    
+    print(ggplotly(cat_plot))
+  }
+}
+```
+
+## Correlation Analysis
+
+```{r correlation-analysis}
+# Calculate correlations for numerical features
+if (length(numerical_features) > 1) {
+  cor_matrix %
+    select(all_of(numerical_features)) %>%
+    cor(use = "complete.obs")
+  
+  # Create correlation heatmap
+  corrplot::corrplot(
+    cor_matrix,
+    method = "color",
+    type = "upper",
+    order = "hclust",
+    tl.cex = 0.8,
+    tl.col = "black",
+    tl.srt = 45
+  )
+  
+  # Interactive correlation heatmap
+  plotly_cor %
+    layout(title = "Feature Correlation Matrix")
+  
+  plotly_cor
+}
+```
+
+## Outlier Detection
+
+```{r outlier-detection}
+# Box plots for numerical features
+if (length(numerical_features) > 0) {
+  boxplot_data %
+    select(all_of(numerical_features)) %>%
+    tidyr::pivot_longer(everything(), names_to = "variable", values_to = "value")
+  
+  outlier_plot %
+    ggplot(aes(x = variable, y = value)) +
+    geom_boxplot(fill = "orange", alpha = 0.7) +
+    facet_wrap(~ variable, scales = "free") +
+    labs(title = "Box Plots for Outlier Detection") +
+    theme_minimal() +
+    theme(axis.text.x = element_blank())
+  
+  print(outlier_plot)
+}
+```
+
+## Data Quality Issues
+
+```{r data-quality}
+# Identify potential data quality issues
+quality_issues  0) {
+  quality_issues$duplicates %
+  summarise_all(~ n_distinct(., na.rm = TRUE)) %>%
+  tidyr::pivot_longer(everything(), names_to = "variable", values_to = "unique_values") %>%
+  filter(unique_values <= 1) %>%
+  pull(variable)
+
+if (length(constant_cols) > 0) {
+  quality_issues$constant_columns %
+  select_if(function(x) is.character(x) || is.factor(x)) %>%
+  summarise_all(~ n_distinct(.)) %>%
+  tidyr::pivot_longer(everything(), names_to = "variable", values_to = "unique_values") %>%
+  filter(unique_values > 0.9 * nrow(raw_data)) %>%
+  pull(variable)
+
+if (length(high_cardinality) > 0) {
+  quality_issues$high_cardinality  0) {
+  cat("Data Quality Issues Found:\n")
+  for (issue in names(quality_issues)) {
+    cat("-", quality_issues[[issue]], "\n")
+  }
+} else {
+  cat("No major data quality issues detected.\n")
+}
+```
+
+## Key Findings
+
+```{r key-findings}
+# Summarize key findings from exploration
+findings  0), "variables with missing values"),
+  "Numerical features" = length(numerical_features),
+  "Categorical features" = length(categorical_features)
+)
+
+findings_df <- data.frame(
+  Finding = names(findings),
+  Description = unlist(findings)
+)
+
+knitr::kable(findings_df, caption = "Key Exploration Findings")
+```
+
+## Next Steps
+
+Based on the exploration, the following steps are recommended:
+
+1. **Data Cleaning**: Address missing values and outliers
+2. **Feature Engineering**: Create new features based on domain knowledge
+3. **Data Preprocessing**: Scale numerical features and encode categorical variables
+4. **Model Selection**: Choose appropriate algorithms based on the data characteristics
+
+---
+
+*Analysis completed on `r Sys.Date()`*

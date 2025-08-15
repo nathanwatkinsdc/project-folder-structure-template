@@ -1,0 +1,60 @@
+# Main configuration file
+project:
+  name: "data-science-project"
+  version: "1.0.0"
+  description: "A well-structured data science project"
+  author: "Your Name"
+
+# Data paths
+data:
+  raw_path: "data/raw/"
+  interim_path: "data/interim/"
+  processed_path: "data/processed/"
+  external_path: "data/external/"
+
+# Model configuration
+modeling:
+  random_state: 42
+  test_size: 0.2
+  validation_size: 0.2
+  cross_validation_folds: 5
+
+# Feature engineering
+features:
+  target_column: "target"
+  categorical_features: []
+  numerical_features: []
+  datetime_features: []
+
+# Model parameters
+models:
+  logistic_regression:
+    C: 1.0
+    max_iter: 1000
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 5
+  xgboost:
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.1
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/project.log"
+
+# MLflow tracking
+mlflow:
+  tracking_uri: "file:./mlruns"
+  experiment_name: "data-science-project"
+
+# Database connection (if needed)
+database:
+  host: "${DATABASE_HOST}"
+  port: "${DATABASE_PORT}"
+  name: "${DATABASE_NAME}"
+  user: "${DATABASE_USER}"
+  password: "${DATABASE_PASSWORD}"

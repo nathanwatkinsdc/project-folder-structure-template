@@ -1,0 +1,338 @@
+## notebooks/02-data-cleaning.Rmd
+
+```rmd
+---
+title: "Data Cleaning and Preprocessing"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 6,
+  dpi = 300
+)
+
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(VIM)  # for missing data visualization
+library(here)
+
+# Source project functions
+source(here("R", "utils.R"))
+source(here("R", "data_processing.R"))
+
+# Load configuration
+config <- load_config()
+setup_logging(config)
+set_seed(config$modeling$seed)
+```
+
+## Data Loading
+
+```{r load-data}
+# Load raw data
+data_path <- here(config$data$raw_path, "dataset.csv")
+raw_data <- load_raw_data(data_path, config)
+
+cat("Original dataset:", nrow(raw_data), "rows ×", ncol(raw_data), "columns\n")
+```
+
+## Data Validation
+
+```{r data-validation}
+# Validate data structure
+is_valid %
+  summarise_all(class) %>%
+  tidyr::pivot_longer(everything(), names_to = "Variable", values_to = "Type")
+
+knitr::kable(data_types, caption = "Data Types")
+```
+
+## Missing Data Analysis
+
+```{r missing-analysis}
+# Detailed missing data analysis
+missing_pattern <- VIM::aggr(
+  raw_data,
+  col = c('navyblue', 'red'),
+  numbers = TRUE,
+  sortVars = TRUE,
+  labels = names(raw_data),
+  cex.axis = 0.7,
+  gap = 3,
+  ylab = c("Histogram of missing data", "Pattern")
+)
+
+# Missing data by combinations
+VIM::marginplot(
+  raw_data[, c(1, 2)],  # Adjust columns as needed
+  col = c("blue", "red", "orange")
+)
+```
+
+## Duplicate Records
+
+```{r duplicates}
+# Check for duplicate records
+duplicate_indices  0) {
+  # Show duplicate records
+  duplicate_records <- raw_data[duplicate_indices, ]
+  DT::datatable(
+    duplicate_records,
+    caption = "Duplicate Records",
+    options = list(scrollX = TRUE, pageLength = 10)
+  )
+  
+  # Remove duplicates
+  cleaned_data <- raw_data[!duplicate_indices, ]
+  cat("After removing duplicates:", nrow(cleaned_data), "rows\n")
+} else {
+  cleaned_data <- raw_data
+  cat("No duplicate records found.\n")
+}
+```
+
+## Outlier Detection and Treatment
+
+```{r outliers}
+# Identify numerical columns
+numerical_cols  0) {
+  # Function to detect outliers using IQR method
+  detect_outliers  upper_bound)
+    return(outliers)
+  }
+  
+  # Detect outliers for each numerical column
+  outlier_summary <- data.frame()
+  
+  for (col in numerical_cols) {
+    if (col %in% names(cleaned_data)) {
+      outlier_indices <- detect_outliers(cleaned_data[[col]])
+      outlier_count <- length(outlier_indices)
+      outlier_percentage <- (outlier_count / nrow(cleaned_data)) * 100
+      
+      outlier_summary %
+        ggplot(aes(y = !!sym(col))) +
+        geom_boxplot(fill = "lightblue", alpha = 0.7) +
+        labs(title = paste("Before Treatment:", col)) +
+        theme_minimal()
+      
+      # Cap outliers (Winsorization)
+      Q1 %
+        ggplot(aes(y = !!sym(col))) +
+        geom_boxplot(fill = "lightgreen", alpha = 0.7) +
+        labs(title = paste("After Treatment:", col)) +
+        theme_minimal()
+      
+      # Combine plots
+      combined_plot <- gridExtra::grid.arrange(p1, p2, ncol = 2)
+      print(combined_plot)
+    }
+  }
+}
+```
+
+## Missing Value Treatment
+
+```{r missing-treatment}
+# Apply cleaning function
+cleaned_data %
+  summarise_all(~ sum(is.na(.))) %>%
+  tidyr::pivot_longer(everything(), names_to = "Variable", values_to = "Missing_Before")
+
+missing_after %
+  summarise_all(~ sum(is.na(.))) %>%
+  tidyr::pivot_longer(everything(), names_to = "Variable", values_to = "Missing_After")
+
+missing_comparison %
+  left_join(missing_after, by = "Variable") %>%
+  mutate(
+    Improvement = Missing_Before - Missing_After,
+    Percentage_Before = round(Missing_Before / nrow(raw_data) * 100, 2),
+    Percentage_After = round(Missing_After / nrow(cleaned_data) * 100, 2)
+  ) %>%
+  filter(Missing_Before > 0 | Missing_After > 0)
+
+knitr::kable(missing_comparison, caption = "Missing Value Treatment Results")
+```
+
+## Feature Engineering
+
+```{r feature-engineering}
+# Create new features based on domain knowledge
+# Example transformations:
+
+# 1. Log transformations for skewed variables
+skewed_vars %
+    mutate(
+      age_group = case_when(
+        age < 25 ~ "Young",
+        age < 45 ~ "Middle",
+        age < 65 ~ "Senior",
+        TRUE ~ "Elder"
+      )
+    )
+}
+
+# 3. Interaction features
+# Example: Create interaction between two important features
+if (all(c("feature1", "feature2") %in% names(cleaned_data))) {
+  cleaned_data %
+    mutate(feature1_x_feature2 = feature1 * feature2)
+}
+
+# 4. Date features (if applicable)
+date_cols %
+      mutate(
+        !!paste0(date_col, "_year") := lubridate::year(!!sym(date_col)),
+        !!paste0(date_col, "_month") := lubridate::month(!!sym(date_col)),
+        !!paste0(date_col, "_weekday") := lubridate::wday(!!sym(date_col)),
+        !!paste0(date_col, "_quarter") := lubridate::quarter(!!sym(date_col))
+      )
+  }
+}
+
+cat("Features after engineering:", ncol(cleaned_data), "columns\n")
+```
+
+## Data Encoding
+
+```{r encoding}
+# Encode categorical variables
+categorical_cols  2) {
+      # One-hot encoding
+      dummy_vars %
+        select(-!!sym(col)) %>%
+        bind_cols(dummy_df)
+        
+    } else if (n_unique > 10) {
+      # Label encoding for high cardinality variables
+      cleaned_data[[col]] <- as.numeric(as.factor(cleaned_data[[col]]))
+    }
+  }
+}
+```
+
+## Feature Scaling
+
+```{r scaling}
+# Scale numerical features
+numerical_cols_final %
+  select_if(is.numeric) %>%
+  names()
+
+# Remove target column from scaling
+target_col  0) {
+  # Store scaling parameters for later use
+  scaling_params <- list()
+  
+  for (col in numerical_cols_final) {
+    mean_val <- mean(cleaned_data[[col]], na.rm = TRUE)
+    sd_val <- sd(cleaned_data[[col]], na.rm = TRUE)
+    
+    scaling_params[[col]] <- list(mean = mean_val, sd = sd_val)
+    
+    # Apply standardization
+    cleaned_data[[col]] <- (cleaned_data[[col]] - mean_val) / sd_val
+  }
+  
+  # Save scaling parameters for deployment
+  saveRDS(scaling_params, here("models", "scaling_params.rds"))
+  
+  cat("Scaled", length(numerical_cols_final), "numerical features\n")
+}
+```
+
+## Final Data Quality Check
+
+```{r final-quality-check}
+# Final data summary
+cat("Final dataset dimensions:", nrow(cleaned_data), "rows ×", ncol(cleaned_data), "columns\n")
+
+# Check for any remaining missing values
+final_missing %
+  summarise_all(~ sum(is.na(.))) %>%
+  tidyr::pivot_longer(everything(), names_to = "Variable", values_to = "Missing") %>%
+  filter(Missing > 0)
+
+if (nrow(final_missing) > 0) {
+  cat("Warning: Some missing values remain:\n")
+  print(final_missing)
+} else {
+  cat("✓ No missing values remaining\n")
+}
+
+# Check for infinite values
+infinite_check %
+  summarise_all(~ sum(is.infinite(.))) %>%
+  tidyr::pivot_longer(everything(), names_to = "Variable", values_to = "Infinite") %>%
+  filter(Infinite > 0)
+
+if (nrow(infinite_check) > 0) {
+  cat("Warning: Infinite values found:\n")
+  print(infinite_check)
+} else {
+  cat("✓ No infinite values found\n")
+}
+```
+
+## Save Cleaned Data
+
+```{r save-data}
+# Save cleaned data
+output_path <- here(config$data$processed_path, "cleaned_dataset.csv")
+safe_write(cleaned_data, output_path, format = "csv")
+
+# Also save as RDS for faster loading
+output_path_rds <- here(config$data$processed_path, "cleaned_dataset.rds")
+safe_write(cleaned_data, output_path_rds, format = "rds")
+
+cat("Cleaned data saved to:", output_path, "\n")
+```
+
+## Data Cleaning Summary
+
+```{r cleaning-summary}
+# Create comprehensive summary
+cleaning_summary %
+    select_if(is.numeric) %>%
+    select(-!!sym(target_col)) %>%
+    summarise_all(~ cor(., cleaned_data[[target_col]], use = "complete.obs")) %>%
+    tidyr::pivot_longer(everything(), names_to = "Feature", values_to = "Correlation") %>%
+    arrange(desc(abs(Correlation))) %>%
+    head(10)
+  
+  cat("\nTop 10 features by correlation with target:\n")
+  print(target_correlations)
+}
+```
+
+## Next Steps
+
+The data cleaning process is complete. Key accomplishments:
+
+1. ✓ Removed duplicate records
+2. ✓ Treated outliers using winsorization
+3. ✓ Imputed missing values
+4. ✓ Created new engineered features
+5. ✓ Encoded categorical variables
+6. ✓ Scaled numerical features
+
+**Ready for modeling phase**: The cleaned dataset is now ready for feature selection and model training.
+
+---
+
+*Data cleaning completed on `r Sys.Date()`*

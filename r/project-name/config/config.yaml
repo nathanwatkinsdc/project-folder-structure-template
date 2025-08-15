@@ -1,0 +1,153 @@
+# Main configuration file for R project
+default:
+  project:
+    name: "data-science-project"
+    version: "1.0.0"
+    description: "A well-structured data science project in R"
+    author: "Your Name"
+
+  # Data paths
+  data:
+    raw_path: "data/raw/"
+    interim_path: "data/interim/"
+    processed_path: "data/processed/"
+    external_path: "data/external/"
+
+  # Modeling configuration
+  modeling:
+    seed: 42
+    test_split: 0.2
+    validation_split: 0.2
+    cv_folds: 5
+    parallel: TRUE
+    cores: !expr parallel::detectCores() - 1
+
+  # Feature engineering
+  features:
+    target_column: "target"
+    categorical_features: []
+    numerical_features: []
+    datetime_features: []
+    remove_correlated: TRUE
+    correlation_threshold: 0.95
+
+  # Model parameters
+  models:
+    logistic_regression:
+      family: "binomial"
+      method: "glm"
+    random_forest:
+      ntree: 500
+      mtry: !expr sqrt(ncol(data))
+      importance: TRUE
+    xgboost:
+      nrounds: 100
+      max_depth: 6
+      eta: 0.1
+      subsample: 0.8
+      colsample_bytree: 0.8
+
+  # Visualization
+  plotting:
+    theme: "theme_minimal"
+    color_palette: "viridis"
+    figure_width: 10
+    figure_height: 8
+    dpi: 300
+
+  # Logging
+  logging:
+    level: "INFO"
+    file: "logs/project.log"
+    console: TRUE
+
+# Environment-specific configurations
+development:
+  inherits: default
+  logging:
+    level: "DEBUG"
+
+production:
+  inherits: default
+  modeling:
+    parallel: FALSE
+    cores: 1
+  logging:
+    level: "WARN"
+    console: FALSE# Main configuration file for R project
+default:
+  project:
+    name: "data-science-project"
+    version: "1.0.0"
+    description: "A well-structured data science project in R"
+    author: "Your Name"
+
+  # Data paths
+  data:
+    raw_path: "data/raw/"
+    interim_path: "data/interim/"
+    processed_path: "data/processed/"
+    external_path: "data/external/"
+
+  # Modeling configuration
+  modeling:
+    seed: 42
+    test_split: 0.2
+    validation_split: 0.2
+    cv_folds: 5
+    parallel: TRUE
+    cores: !expr parallel::detectCores() - 1
+
+  # Feature engineering
+  features:
+    target_column: "target"
+    categorical_features: []
+    numerical_features: []
+    datetime_features: []
+    remove_correlated: TRUE
+    correlation_threshold: 0.95
+
+  # Model parameters
+  models:
+    logistic_regression:
+      family: "binomial"
+      method: "glm"
+    random_forest:
+      ntree: 500
+      mtry: !expr sqrt(ncol(data))
+      importance: TRUE
+    xgboost:
+      nrounds: 100
+      max_depth: 6
+      eta: 0.1
+      subsample: 0.8
+      colsample_bytree: 0.8
+
+  # Visualization
+  plotting:
+    theme: "theme_minimal"
+    color_palette: "viridis"
+    figure_width: 10
+    figure_height: 8
+    dpi: 300
+
+  # Logging
+  logging:
+    level: "INFO"
+    file: "logs/project.log"
+    console: TRUE
+
+# Environment-specific configurations
+development:
+  inherits: default
+  logging:
+    level: "DEBUG"
+
+production:
+  inherits: default
+  modeling:
+    parallel: FALSE
+    cores: 1
+  logging:
+    level: "WARN"
+    console: FALSE

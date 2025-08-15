@@ -1,0 +1,408 @@
+## notebooks/04-modeling.Rmd
+
+```rmd
+---
+title: "Model Development and Training"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 6,
+  dpi = 300
+)
+
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(caret)
+library(randomForest)
+library(pROC)
+library(here)
+
+# Optional advanced libraries
+if (requireNamespace("xgboost", quietly = TRUE)) library(xgboost)
+if (requireNamespace("lightgbm", quietly = TRUE)) library(lightgbm)
+
+# Source project functions
+source(here("R", "utils.R"))
+source(here("R", "data_processing.R"))
+source(here("R", "modeling.R"))
+
+# Load configuration
+config <- load_config()
+setup_logging(config)
+set_seed(config$modeling$seed)
+```
+
+## Data Loading
+
+```{r load-data}
+# Load cleaned data
+data_path <- here(config$data$processed_path, "cleaned_dataset.rds")
+cleaned_data <- safe_read(data_path, format = "rds")
+
+cat("Loaded cleaned dataset:", nrow(cleaned_data), "rows ×", ncol(cleaned_data), "columns\n")
+```
+
+## Data Splitting
+
+```{r data-split}
+# Split data into train/validation/test sets
+target_col % count(!!sym(target_col)) %>% mutate(Split = "Train"),
+  validation_data %>% count(!!sym(target_col)) %>% mutate(Split = "Validation"),
+  test_data %>% count(!!sym(target_col)) %>% mutate(Split = "Test")
+) %>%
+  group_by(Split) %>%
+  mutate(Percentage = round(n / sum(n) * 100, 1))
+
+knitr::kable(target_dist, caption = "Target Distribution Across Splits")
+```
+
+## Baseline Model
+
+```{r baseline-model}
+# Create a simple baseline model for comparison
+baseline_accuracy %
+  count(!!sym(target_col)) %>%
+  arrange(desc(n)) %>%
+  slice(1) %>%
+  pull(n) / nrow(train_data)
+
+cat("Baseline accuracy (majority class):", round(baseline_accuracy, 3), "\n")
+```
+
+## Model Training
+
+```{r model-training}
+# Train multiple models
+trained_models <- train_models(train_data, config)
+
+cat("Trained models:", paste(names(trained_models), collapse = ", "), "\n")
+```
+
+## Model Evaluation on Validation Set
+
+```{r validation-evaluation}
+# Evaluate models on validation set
+validation_results % arrange(desc(accuracy)),
+  caption = "Model Performance on Validation Set",
+  digits = 3
+)
+
+# Visualize model comparison
+performance_plot %
+  select(model, accuracy, precision, recall, f1_score) %>%
+  tidyr::pivot_longer(cols = -model, names_to = "metric", values_to = "value") %>%
+  ggplot(aes(x = model, y = value, fill = metric)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  labs(
+    title = "Model Performance Comparison",
+    x = "Model",
+    y = "Score",
+    fill = "Metric"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplotly(performance_plot)
+```
+
+## ROC Curves
+
+```{r roc-curves}
+# Create ROC curves for each model
+target_col <- config$features$target_column
+actual_labels <- validation_data[[target_col]]
+
+roc_data <- data.frame()
+auc_values <- c()
+
+for (model_name in names(trained_models)) {
+  model <- trained_models[[model_name]]
+  
+  # Get predictions
+  if (model_name == "xgboost" && requireNamespace("xgboost", quietly = TRUE)) {
+    feature_cols  0) {
+  roc_plot %
+    ggplot(aes(x = 1 - specificity, y = sensitivity, color = model)) +
+    geom_line(size = 1.2) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", alpha = 0.5) +
+    labs(
+      title = "ROC Curves Comparison",
+      x = "False Positive Rate (1 - Specificity)",
+      y = "True Positive Rate (Sensitivity)",
+      color = "Model"
+    ) +
+    theme_minimal() +
+    coord_equal()
+  
+  # Add AUC values to legend
+  for (model_name in names(auc_values)) {
+    roc_plot <- roc_plot +
+      annotate("text", x = 0.6, y = 0.4 - 0.05 * which(names(auc_values) == model_name),
+               label = paste(model_name, "AUC:", round(auc_values[model_name], 3)),
+               hjust = 0)
+  }
+  
+  ggplotly(roc_plot)
+}
+```
+
+## Feature Importance
+
+```{r feature-importance}
+# Extract feature importance from different models
+importance_data  1) {
+    # For classification, use MeanDecreaseGini
+    importance_col  0) {
+    xgb_imp_df  0) {
+  # Get top features for each model
+  top_features %
+    group_by(model) %>%
+    top_n(15, importance) %>%
+    ungroup()
+  
+  importance_plot %
+    ggplot(aes(x = reorder(feature, importance), y = importance, fill = model)) +
+    geom_col() +
+    facet_wrap(~ model, scales = "free") +
+    coord_flip() +
+    labs(
+      title = "Top Feature Importance",
+      x = "Features",
+      y = "Importance Score"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  print(importance_plot)
+}
+```
+
+## Hyperparameter Tuning
+
+```{r hyperparameter-tuning}
+# Hyperparameter tuning for the best performing model
+best_model_name %
+  arrange(desc(f1_score)) %>%
+  slice(1) %>%
+  pull(model)
+
+cat("Best performing model:", best_model_name, "\n")
+
+# Example: Tune Random Forest
+if (best_model_name == "random_forest") {
+  # Define parameter grid
+  rf_grid <- expand.grid(
+    mtry = c(2, 4, 6, 8),
+    ntree = c(100, 300, 500),
+    stringsAsFactors = FALSE
+  )
+  
+  # Cross-validation setup
+  ctrl <- trainControl(
+    method = "cv",
+    number = config$modeling$cv_folds,
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary,
+    savePredictions = TRUE
+  )
+  
+  # Prepare data for caret
+  feature_cols <- setdiff(names(train_data), target_col)
+  X_train <- train_data[, feature_cols]
+  y_train <- as.factor(train_data[[target_col]])
+  
+  # Make sure target is factor with proper levels
+  if (length(unique(y_train)) == 2) {
+    levels(y_train) <- c("Class0", "Class1")
+  }
+  
+  # Hyperparameter tuning
+  set_seed(config$modeling$seed)
+  tuned_model <- train(
+    x = X_train,
+    y = y_train,
+    method = "rf",
+    tuneGrid = data.frame(mtry = c(2, 4, 6, 8)),
+    trControl = ctrl,
+    metric = "ROC",
+    ntree = 500
+  )
+  
+  # Display tuning results
+  print(tuned_model)
+  plot(tuned_model)
+  
+  # Store tuned model
+  trained_models$random_forest_tuned <- tuned_model$finalModel
+}
+```
+
+## Final Model Selection
+
+```{r final-model-selection}
+# Select best model based on validation performance
+best_model <- trained_models[[best_model_name]]
+
+cat("Selected final model:", best_model_name, "\n")
+
+# Final evaluation on test set
+final_results <- evaluate_models(
+  list(final_model = best_model),
+  test_data,
+  config
+)
+
+knitr::kable(
+  final_results,
+  caption = "Final Model Performance on Test Set",
+  digits = 3
+)
+```
+
+## Model Interpretation
+
+```{r model-interpretation}
+# Generate predictions for interpretation
+feature_cols <- setdiff(names(test_data), target_col)
+
+if (best_model_name == "xgboost" && requireNamespace("xgboost", quietly = TRUE)) {
+  X_test %
+  ggplot(aes(x = predictions)) +
+  geom_histogram(bins = 30, fill = "skyblue", alpha = 0.7) +
+  labs(
+    title = "Distribution of Predictions on Test Set",
+    x = "Predicted Probability",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+ggplotly(pred_dist_plot)
+
+# Confusion matrix at optimal threshold
+optimal_threshold  optimal_threshold, 1, 0)
+actual_classes <- test_data[[target_col]]
+
+confusion_matrix <- table(
+  Predicted = predicted_classes,
+  Actual = actual_classes
+)
+
+cat("Confusion Matrix (threshold =", optimal_threshold, "):\n")
+print(confusion_matrix)
+
+# Calculate additional metrics
+if (nrow(confusion_matrix) == 2 && ncol(confusion_matrix) == 2) {
+  TP <- confusion_matrix[2, 2]
+  TN <- confusion_matrix[1, 1]
+  FP <- confusion_matrix[2, 1]
+  FN <- confusion_matrix[1, 2]
+  
+  specificity <- TN / (TN + FP)
+  sensitivity <- TP / (TP + FN)
+  
+  cat("\nDetailed Metrics:\n")
+  cat("- Sensitivity (Recall):", round(sensitivity, 3), "\n")
+  cat("- Specificity:", round(specificity, 3), "\n")
+  cat("- False Positive Rate:", round(1 - specificity, 3), "\n")
+  cat("- False Negative Rate:", round(1 - sensitivity, 3), "\n")
+}
+```
+
+## Model Saving
+
+```{r model-saving}
+# Save the final model
+model_output_dir <- here("models", "trained")
+if (!dir.exists(model_output_dir)) {
+  dir.create(model_output_dir, recursive = TRUE)
+}
+
+# Save model with metadata
+model_package <- list(
+  model = best_model,
+  model_type = best_model_name,
+  training_date = Sys.Date(),
+  config = config,
+  performance = final_results,
+  feature_names = feature_cols,
+  scaling_params = if (file.exists(here("models", "scaling_params.rds"))) {
+    readRDS(here("models", "scaling_params.rds"))
+  } else {
+    NULL
+  }
+)
+
+# Save final model package
+final_model_path <- file.path(model_output_dir, "final_model.rds")
+saveRDS(model_package, final_model_path)
+
+cat("Final model saved to:", final_model_path, "\n")
+
+# Save individual models for comparison
+save_models(trained_models, model_output_dir)
+```
+
+## Model Summary Report
+
+```{r model-summary}
+# Create comprehensive model summary
+model_summary <- data.frame(
+  Metric = c(
+    "Model Type",
+    "Training Samples",
+    "Validation Samples", 
+    "Test Samples",
+    "Number of Features",
+    "Test Accuracy",
+    "Test Precision",
+    "Test Recall",
+    "Test F1-Score",
+    "Test AUC"
+  ),
+  Value = c(
+    best_model_name,
+    nrow(train_data),
+    nrow(validation_data),
+    nrow(test_data),
+    length(feature_cols),
+    round(final_results$accuracy, 3),
+    round(final_results$precision, 3),
+    round(final_results$recall, 3),
+    round(final_results$f1_score, 3),
+    round(final_results$auc, 3)
+  )
+)
+
+knitr::kable(model_summary, caption = "Final Model Summary")
+```
+
+## Next Steps
+
+Model development is complete! Key achievements:
+
+1. ✓ Trained multiple model types
+2. ✓ Performed hyperparameter tuning
+3. ✓ Evaluated on independent test set
+4. ✓ Analyzed feature importance
+5. ✓ Saved production-ready model
+
+**Ready for deployment**: The final model is packaged and ready for production deployment.
+
+---
+
+*Model training completed on `r Sys.Date()`*
