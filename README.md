@@ -15,10 +15,14 @@ Each is independently usable and contains its own `README.md` with detailed usag
 
 ## 🗂️ Contents
 
+```
 project-folder-structure-template/
 ├── python/ # Python-specific project template
 ├── R/ # R-specific project template
 └── README.md # This file (overview of the whole repository)
+```
+
+Each project (R and python) has its own README as well.
 
 ## 🐍 Python Template Highlights
 
@@ -64,25 +68,17 @@ An R package-style structure supporting tidy workflows, reproducible research, a
    ```
 3. Follow the setup instructions inside the chosen folder’s README.md.
 
-🧩 Use Cases
+## 🧩 Use Cases
 - Personal and academic data science projects
 - Team-based analytics and modeling efforts
 - Research reproducibility
 - Building deployable pipelines in Python or R
 - Teaching project structure and best practices
 
-📄 License
+## 📄 License
 This project is licensed under the MIT License.
 
-🙏 Acknowledgments
+## 🙏 Acknowledgments
 - Inspired by the [Cookiecutter Data Science](https://cookiecutter-data-science.drivendata.org/) project
 - Built with love for the open-source Python and R data science communities
-
-Let me know if you’d like me to:
-- Add GitHub badges (license, R/Python version, etc)
-- Auto-generate a sidebar for GitHub Pages
-- Create `cookiecutter`-style versions of these templates
-- Set up a CI workflow or `devcontainer.json` for GitHub Codespaces
-
-Happy to help polish this into a true portfolio piece.
 
